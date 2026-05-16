@@ -1,0 +1,14 @@
+# ==============================================
+# HT-PINN 地下水参数反演 精确依赖版本
+# 严格匹配原始论文环境，确保100%可复现
+# 安装命令：pip install -r requirements.txt -f https://download.pytorch.org/whl/torch_stable.html
+# ==============================================
+python==3.9.16
+torch==1.13.1+cpu
+torchvision==0.14.1+cpu
+torchaudio==0.13.1
+numpy==1.24.3
+matplotlib==3.7.1
+scipy==1.10.1
+pandas==2.0.1
+tqdm==4.65.0
