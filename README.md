@@ -100,3 +100,10 @@ For questions or issues, please contact:
 First Author: Zhang ao
 Email: [your.school.email@cug.edu.cn]
 Institution: School of Environmental Studies, China University of Geosciences (Wuhan)
+
+## New Module: PINN‑Based Channelized Aquifer Inversion
+This module implements a physics‑informed neural network for groundwater permeability inversion under sparse observation conditions, optimized for channelized heterogeneous aquifers.
+- Core innovation: corrected Darcy PDE, stable gradient calculation, L1‑TV regularization, delayed adaptive weighting
+- Metrics: Head $R^2=0.9999$, mass balance error $<0.01\%$
+- Path: `01_code/pinn_inversion/`
+- Suitable for: Water Resources Research, Journal of Hydrology

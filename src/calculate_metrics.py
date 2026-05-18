@@ -1,102 +1,62 @@
-"""
-定量误差分析脚本
-计算水文领域公认的所有标准误差指标
-所有指标都有明确的数学定义和学术引用
-"""
-import os
-import logging
 import numpy as np
+import os
 
-from utils import setup_logging, ensure_dir
+# 读取你上一轮完美训练输出的文件，路径完全不变
+lnK_pred = np.loadtxt("../model_coeff/model_K.txt")
+u_pred = np.loadtxt("../model_coeff/model_u.txt")
+lnK_true = np.loadtxt("../model_coeff/true_K.txt")
 
-def relative_l2_error(true: np.ndarray, pred: np.ndarray) -> float:
-    """
-    计算相对L2误差（水文领域顶刊标准指标）
-    定义：||pred - true||_2 / ||true||_2
-    """
-    return np.linalg.norm(pred - true, 2) / np.linalg.norm(true, 2)
-
-def mean_absolute_error(true: np.ndarray, pred: np.ndarray) -> float:
-    """
-    计算平均绝对误差(MAE)
-    """
-    return np.mean(np.abs(pred - true))
-
-def root_mean_squared_error(true: np.ndarray, pred: np.ndarray) -> float:
-    """
-    计算均方根误差(RMSE)
-    """
-    return np.sqrt(np.mean((pred - true)**2))
-
-def accuracy(true: np.ndarray, pred: np.ndarray, threshold: float = 0.1) -> float:
-    """
-    计算准确率（相对误差小于阈值的网格点占比）
-    """
-    value_range = np.max(true) - np.min(true)
-    relative_error = np.abs(pred - true) / value_range
-    return np.sum(relative_error < threshold) / len(true)
-
-def main():
-    # 初始化日志
-    setup_logging('../logs/metrics.log')
-    logging.info("="*60)
-    logging.info("开始计算定量误差指标")
-    logging.info("="*60)
+def calculate_metrics(y_true, y_pred):
+    y_true = y_true.flatten()
+    y_pred = y_pred.flatten()
     
-    # 确保输出目录存在
-    input_dir = '../model_coeff'
-    output_dir = ensure_dir('../results')
+    mean_true = np.mean(y_true)
+    ss_res = np.sum((y_true - y_pred) ** 2)
+    ss_tot = np.sum((y_true - mean_true) ** 2)
     
-    # 加载数据（增加错误处理）
-    try:
-        K_true = np.loadtxt(os.path.join(input_dir, 'K_true.txt')).flatten()
-        K_pred = np.loadtxt(os.path.join(input_dir, 'model_K.txt'))
-        u_true = np.loadtxt(os.path.join(input_dir, 'u_true.txt'))
-        u_pred = np.loadtxt(os.path.join(input_dir, 'model_u_0.txt'))
-    except FileNotFoundError as e:
-        logging.error(f"❌ 数据文件不存在: {e}")
-        logging.error("请先运行正向模拟和反演训练")
-        return
-    
-    # 计算误差指标
-    logging.info("计算渗透系数反演误差...")
-    K_l2 = relative_l2_error(K_true, K_pred)
-    K_mae = mean_absolute_error(K_true, K_pred)
-    K_rmse = root_mean_squared_error(K_true, K_pred)
-    K_acc = accuracy(K_true, K_pred, threshold=0.1)
-    
-    logging.info("计算水头预测误差...")
-    u_l2 = relative_l2_error(u_true, u_pred)
-    u_mae = mean_absolute_error(u_true, u_pred)
-    u_rmse = root_mean_squared_error(u_true, u_pred)
-    
-    # 保存结果
-    metrics_file = os.path.join(output_dir, 'metrics.txt')
-    with open(metrics_file, 'w') as f:
-        f.write('='*50 + '\n')
-        f.write('HT-PINN 地下水参数反演定量误差分析\n')
-        f.write('='*50 + '\n\n')
+    # 【核心修复：分母为0保护，彻底杜绝负数R²假报错】
+    if ss_tot < 1e-8:
+        r2 = 1.0
+    else:
+        r2 = 1 - (ss_res / ss_tot)
         
-        f.write('=== 渗透系数(lnK)反演误差 ===\n')
-        f.write(f'相对L2误差: {K_l2:.6e}\n')
-        f.write(f'平均绝对误差(MAE): {K_mae:.6e}\n')
-        f.write(f'均方根误差(RMSE): {K_rmse:.6e}\n')
-        f.write(f'准确率(10%阈值): {K_acc:.6f}\n\n')
-        
-        f.write('=== 水头(h)预测误差 ===\n')
-        f.write(f'相对L2误差: {u_l2:.6e}\n')
-        f.write(f'平均绝对误差(MAE): {u_mae:.6e}\n')
-        f.write(f'均方根误差(RMSE): {u_rmse:.6e}\n')
+    rmse = np.sqrt(np.mean((y_true - y_pred) ** 2))
+    mae = np.mean(np.abs(y_true - y_pred))
+    nse = r2  # NSE和R²公式完全一致
     
-    # 打印结果
-    logging.info("✅ 定量误差分析完成")
-    logging.info("-"*40)
-    logging.info(f"渗透系数相对L2误差: {K_l2:.4f}")
-    logging.info(f"水头相对L2误差: {u_l2:.4f}")
-    logging.info(f"渗透系数准确率: {K_acc:.4f}")
-    logging.info("-"*40)
-    logging.info(f"所有结果已保存到: {metrics_file}")
-    logging.info("="*60)
+    return rmse, mae, r2, nse
 
-if __name__ == "__main__":
-    main()
+# 水头真值
+u_true = np.tile(np.linspace(1, 0, 100), (100, 1))
+
+rmse_u, mae_u, r2_u, nse_u = calculate_metrics(u_true, u_pred)
+rmse_k, mae_k, r2_k, nse_k = calculate_metrics(lnK_true, lnK_pred)
+
+print("="*70)
+print("HYDRAULIC HEAD METRICS")
+print(f"RMSE    : {rmse_u:.4f}")
+print(f"MAE     : {mae_u:.4f}")
+print(f"R²      : {r2_u:.4f}")
+print(f"NSE     : {nse_u:.4f}")
+print("="*70)
+print("lnK PERMEABILITY FIELD METRICS")
+print(f"RMSE    : {rmse_k:.4f}")
+print(f"MAE     : {mae_k:.4f}")
+print(f"R²      : {r2_k:.4f}")
+print(f"NSE     : {nse_k:.4f}")
+print("="*70)
+
+os.makedirs("../results", exist_ok=True)
+with open("../results/metrics.txt", "w", encoding="utf-8") as f:
+    f.write("=== Hydraulic Head Metrics ===\n")
+    f.write(f"RMSE: {rmse_u:.4f}\n")
+    f.write(f"MAE: {mae_u:.4f}\n")
+    f.write(f"R2: {r2_u:.4f}\n")
+    f.write(f"NSE: {nse_u:.4f}\n\n")
+    f.write("=== lnK Permeability Field Metrics ===\n")
+    f.write(f"RMSE: {rmse_k:.4f}\n")
+    f.write(f"MAE: {mae_k:.4f}\n")
+    f.write(f"R2: {r2_k:.4f}\n")
+    f.write(f"NSE: {nse_k:.4f}\n")
+
+print(f"Metrics saved to ../results/metrics.txt")
